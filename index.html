@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
+<title>MP3レコーダー / mp3rec</title>
+</head>
+<body>
+<h1>MP3レコーダー / mp3rec</h1>
+<select id="selquality"></select>
+<button id="btnrec">録音</button>
+<button id="btnstop" disabled>停止</button>
+<button id="btnplay" disabled>再生</button>
+<button id="btndownload" disabled>ダウンロード</button>
+
+<hr>
+<a href=https://github.com/code4fukui/mp3-recorder/>src on GitHub</a>
+
+<script type="module">
+import { MP3 } from "https://code4fukui.github.io/MP3/MP3.js";
+import { downloadFile } from "https://js.sabae.cc/downloadFile.js";
+import { encodeData } from "https://code4fukui.github.io//dataencoder/encodeData.js";
+
+for (let i = 0; i <= 9; i++) {
+  const opt = document.createElement("option");
+  opt.textContent = "VBR " + i;
+  opt.value = i;
+  selquality.appendChild(opt);
+}
+selquality.value = 9; // 0-9, max!
+
+const encodeMP3 = async (audioChunks) => {
+  if (audioChunks.length != 1) {
+    console.log("audioChunks.length is not 1!!");
+  }
+  const chunk = audioChunks[0];
+  const ctx = new AudioContext();
+  const arrayBuffer = await chunk.arrayBuffer();
+  const audiobuf = await ctx.decodeAudioData(arrayBuffer);
+  console.log(audiobuf);
+
+  const bufs = [];
+  for (let i = 0; i < audiobuf.numberOfChannels; i++) {
+    bufs.push(audiobuf.getChannelData(i));
+  }
+  const mp3bin = await MP3.encode(bufs, {
+    vbrQuality: selquality.value, // 0-9 default 5
+    sampleRate: audiobuf.sampleRate,
+    debug: true, // boolean
+  });
+  return mp3bin;
+};
+
+btnrec.onclick = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mediaRecorder = new MediaRecorder(stream);
+  const audioChunks = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    audioChunks.push(event.data);
+    // console.log(event.data);
+    // Chrome: audio/webm;codecs=opus
+    // Safari: audio/mp4
+  };
+  mediaRecorder.onstop = async () => {
+    const bin = await encodeMP3(audioChunks);
+    btndownload.disabled = false;
+    btndownload.onclick = () => {
+      downloadFile("recording.mp3", bin);
+    };
+    btnplay.disabled = false;
+    btnplay.onclick = () => {
+      const audio = new Audio();
+      audio.src = encodeData("audio/mp3", bin);
+      audio.play();
+    };
+  };
+
+  btnrec.disabled = true;
+  btnstop.disabled = false;
+  mediaRecorder.start();
+
+  btnstop.onclick = () => {
+    mediaRecorder.stop();
+    btnrec.disabled = false;
+    btnstop.disabled = true;
+  };
+};
+</script>
+
+<style>
+body {
+  font-family: sans-serif;
+}
+select {
+  padding: .3em;
+}
+a {
+  color: gray !important;
+}
+</style>
+
+</body>
+</html>
